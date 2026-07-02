@@ -1,0 +1,443 @@
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Card, GameState, Player, ScoringDetails, Difficulty } from './types';
+import { createDeck, calculateBestCapture, calculateRoundScores } from './services/gameLogic';
+import PlayingCard from './components/PlayingCard';
+import ScoreBoard from './components/ScoreBoard';
+
+const STORAGE_KEY = 'gran_casino_escoba_vFINAL_PILES';
+
+const initialPlayer = (id: 'player' | 'cpu'): Player => ({
+  id,
+  name: id === 'player' ? 'Jugador' : 'CPU',
+  hand: [],
+  capturedCards: [],
+  escobas: 0
+});
+
+const App: React.FC = () => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [totalPoints, setTotalPoints] = useState({ player: 0, cpu: 0 });
+  const [difficulty, setDifficulty] = useState<Difficulty>('Normal');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.totalPoints) setTotalPoints(data.totalPoints);
+        if (data.difficulty) setDifficulty(data.difficulty);
+      }
+    } catch (e) {
+      console.error("Error al cargar datos guardados:", e);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  const [gameState, setGameState] = useState<GameState>({
+    deck: [],
+    table: [],
+    player: initialPlayer('player'),
+    cpu: initialPlayer('cpu'),
+    currentPlayer: 'player',
+    lastCaptureBy: null,
+    phase: 'gameOver',
+    winningScore: 15,
+    message: 'Bienvenido al Gran Casino de La Escoba',
+    difficulty: 'Normal',
+    cpuRevealedCard: null,
+    lastCpuPlayedCard: null
+  });
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ totalPoints, difficulty }));
+      setGameState(prev => ({ ...prev, difficulty }));
+    }
+  }, [totalPoints, difficulty, isLoaded]);
+
+  const [roundResults, setRoundResults] = useState<{ player: ScoringDetails, cpu: ScoringDetails } | null>(null);
+  const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+  const [escobaText, setEscobaText] = useState<string | null>(null);
+  const [cpuCapturingCards, setCpuCapturingCards] = useState<string[]>([]);
+
+  const dynamicMessage = useMemo(() => {
+    if (gameState.phase !== 'playing') return gameState.message;
+    if (gameState.currentPlayer === 'cpu') return "La CPU está analizando la jugada...";
+
+    if (selectedCard) {
+      const cap = calculateBestCapture(selectedCard, gameState.table, gameState.difficulty);
+      if (cap && cap.length > 0) return `Sumas 15 capturando ${cap.length} cartas.`;
+      if (cap && cap.length === 0) return `¡JUGADA DE ESCOBA!`;
+      return `Lanzarás el ${selectedCard.value} a la mesa.`;
+    }
+
+    return "Tu turno. Busca sumar 15 con tus cartas.";
+  }, [gameState.phase, gameState.currentPlayer, gameState.table, selectedCard, gameState.difficulty, gameState.message]);
+
+  const highlightedTableCards = useMemo(() => {
+    if (gameState.currentPlayer === 'cpu') return cpuCapturingCards;
+    if (!selectedCard) return [];
+    const cap = calculateBestCapture(selectedCard, gameState.table, gameState.difficulty) || [];
+    return cap.map(c => c.id);
+  }, [selectedCard, gameState.table, gameState.currentPlayer, gameState.difficulty, cpuCapturingCards]);
+
+  const startGame = () => {
+    const deck = createDeck();
+    const table = deck.splice(0, 4);
+    const pHand = deck.splice(0, 3);
+    const cHand = deck.splice(0, 3);
+
+    setGameState(prev => ({
+      ...prev,
+      deck,
+      table,
+      player: { ...initialPlayer('player'), hand: pHand, capturedCards: [], escobas: 0 },
+      cpu: { ...initialPlayer('cpu'), hand: cHand, capturedCards: [], escobas: 0 },
+      currentPlayer: 'player',
+      lastCaptureBy: null,
+      phase: 'playing',
+      message: 'Partida iniciada. ¡Suerte!',
+      cpuRevealedCard: null,
+      lastCpuPlayedCard: null
+    }));
+    setRoundResults(null);
+    setCpuCapturingCards([]);
+  };
+
+  const dealNextRound = useCallback(() => {
+    setGameState(prev => {
+      if (prev.deck.length === 0) {
+        const lastCapturer = prev.lastCaptureBy || 'player';
+        const updatedPlayer = { ...prev.player };
+        const updatedCpu = { ...prev.cpu };
+        if (lastCapturer === 'player') updatedPlayer.capturedCards.push(...prev.table);
+        else updatedCpu.capturedCards.push(...prev.table);
+
+        const scores = calculateRoundScores(updatedPlayer, updatedCpu);
+        setRoundResults({ player: scores.playerDetails, cpu: scores.cpuDetails });
+        return { ...prev, player: updatedPlayer, cpu: updatedCpu, table: [], phase: 'scoring' };
+      }
+      const deck = [...prev.deck];
+      return {
+        ...prev, deck,
+        player: { ...prev.player, hand: deck.splice(0, 3) },
+        cpu: { ...prev.cpu, hand: deck.splice(0, 3) },
+        message: 'Nuevas cartas repartidas.'
+      };
+    });
+  }, []);
+
+  const handleNextRound = () => {
+    if (!roundResults) return;
+    const nP = totalPoints.player + roundResults.player.points;
+    const nC = totalPoints.cpu + roundResults.cpu.points;
+    setTotalPoints({ player: nP, cpu: nC });
+    setRoundResults(null);
+    if (nP >= 15 || nC >= 15) setGameState(prev => ({ ...prev, phase: 'gameOver' }));
+    else startGame();
+  };
+
+  const playCard = async (playerType: 'player' | 'cpu', card: Card) => {
+    if (playerType === 'cpu') {
+      const capture = calculateBestCapture(card, gameState.table, gameState.difficulty);
+      setGameState(p => ({ ...p, cpuRevealedCard: card }));
+      if (capture) {
+        setCpuCapturingCards(capture.map(c => c.id));
+        await new Promise(r => setTimeout(r, 1000));
+      } else {
+        await new Promise(r => setTimeout(r, 800));
+      }
+    }
+
+    setGameState(prev => {
+      const isPlayer = playerType === 'player';
+      const currentP = isPlayer ? prev.player : prev.cpu;
+      const capture = calculateBestCapture(card, prev.table, prev.difficulty);
+      
+      let newTable = [...prev.table];
+      let newCaptured = [...currentP.capturedCards];
+      let newEscobas = currentP.escobas;
+      let lastCapture = prev.lastCaptureBy;
+
+      if (capture) {
+        newCaptured.push(card, ...capture);
+        const captureIds = capture.map(c => c.id);
+        newTable = newTable.filter(c => !captureIds.includes(c.id));
+        lastCapture = playerType;
+        if (newTable.length === 0) {
+          newEscobas++;
+          setEscobaText(`¡ESCOBA!`);
+          setTimeout(() => setEscobaText(null), 1500);
+        }
+      } else {
+        newTable.push(card);
+      }
+
+      return {
+        ...prev,
+        table: newTable,
+        [isPlayer ? 'player' : 'cpu']: {
+          ...currentP,
+          hand: currentP.hand.filter(c => c.id !== card.id),
+          capturedCards: newCaptured,
+          escobas: newEscobas
+        },
+        currentPlayer: isPlayer ? 'cpu' : 'player',
+        lastCaptureBy: lastCapture,
+        message: capture ? `${currentP.name} captura el 15` : `${currentP.name} suelta carta`,
+        cpuRevealedCard: null,
+        lastCpuPlayedCard: isPlayer ? prev.lastCpuPlayedCard : card
+      };
+    });
+    setSelectedCard(null);
+    setCpuCapturingCards([]);
+  };
+
+  useEffect(() => {
+    if (gameState.currentPlayer === 'cpu' && gameState.phase === 'playing' && gameState.cpu.hand.length > 0 && !gameState.cpuRevealedCard) {
+      const timer = setTimeout(() => {
+        const hand = gameState.cpu.hand;
+        const table = gameState.table;
+        let best = { card: hand[0], weight: -1 };
+        hand.forEach(c => {
+          const cap = calculateBestCapture(c, table, gameState.difficulty);
+          const w = cap ? (cap.length * 3) + (c.suit === 'Oros' ? 6 : 0) : 0;
+          if (w > best.weight) best = { card: c, weight: w };
+        });
+        playCard('cpu', best.card);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.currentPlayer, gameState.phase, gameState.cpu.hand, gameState.table, gameState.difficulty, gameState.cpuRevealedCard]);
+
+  useEffect(() => {
+    if (gameState.phase === 'playing' && gameState.player.hand.length === 0 && gameState.cpu.hand.length === 0) {
+      const timer = setTimeout(dealNextRound, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.player.hand.length, gameState.cpu.hand.length, gameState.phase, dealNextRound]);
+
+  if (!isLoaded) return null;
+
+  return (
+    <div className="h-screen w-screen felt-table flex flex-col select-none overflow-hidden">
+      {/* HEADER NAVIGATION */}
+      <nav className="h-20 bg-black/90 backdrop-blur-xl border-b border-amber-500/40 px-4 sm:px-8 flex items-center justify-between z-50">
+        <div className="flex gap-4 sm:gap-12 items-center">
+          <div className={`flex flex-col p-2 rounded-xl transition-all ${gameState.currentPlayer === 'player' ? 'bg-amber-500/20 ring-2 ring-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : 'opacity-60'}`}>
+            <span className="text-[10px] uppercase font-black text-amber-400 tracking-widest">JUGADOR</span>
+            <span className="text-2xl sm:text-3xl font-black font-serif italic text-white leading-none">{totalPoints.player}</span>
+          </div>
+          <div className={`flex flex-col p-2 rounded-xl transition-all ${gameState.currentPlayer === 'cpu' ? 'bg-emerald-500/20 ring-2 ring-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'opacity-40'}`}>
+            <span className="text-[10px] uppercase font-black text-emerald-400 tracking-widest">CPU</span>
+            <span className="text-2xl sm:text-3xl font-black font-serif italic text-white leading-none">{totalPoints.cpu}</span>
+          </div>
+        </div>
+
+        <div className="hidden md:block text-center flex-1 mx-4">
+            <h1 className="text-3xl lg:text-4xl font-serif font-black italic text-amber-500 tracking-tighter text-glow drop-shadow-lg leading-none">LA ESCOBA DE 15</h1>
+        </div>
+
+        <div className="flex items-center gap-4 sm:gap-8">
+            <div className="flex flex-col items-end">
+                <span className="text-[10px] uppercase font-black text-amber-200/60 tracking-widest leading-none mb-1">DIFICULTAD</span>
+                <span className="text-xs font-black text-amber-400">{gameState.difficulty.toUpperCase()}</span>
+            </div>
+            <div className="bg-black/60 px-4 py-2 rounded-full border border-amber-500/30 text-xs font-black text-amber-100 flex items-center gap-2">
+                <i className="fa-solid fa-layer-group text-amber-500"></i>
+                <span>{gameState.deck.length}</span>
+            </div>
+        </div>
+      </nav>
+
+      <main className="flex-1 flex flex-col items-center justify-between py-6 sm:py-10 px-4 sm:px-8 relative">
+        <AnimatePresence>
+          {escobaText && (
+            <motion.div initial={{ scale: 0.5, opacity: 0, rotate: -10 }} animate={{ scale: 1.3, opacity: 1, rotate: 0 }} exit={{ scale: 3, opacity: 0 }}
+              className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none p-4">
+              <div className="bg-[#d4af37] text-black font-serif font-black italic text-6xl sm:text-9xl px-12 sm:px-24 py-8 sm:py-14 rounded-[40px] sm:rounded-[80px] shadow-[0_0_100px_rgba(0,0,0,0.8)] border-[10px] border-black/10 text-center uppercase">
+                {escobaText}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* TOP AREA: CPU & CPU CAPTURES */}
+        <div className="w-full max-w-7xl flex items-center justify-between px-2 sm:px-10">
+          <div className="capture-pile flex flex-col items-center gap-2">
+            <span className="text-[9px] font-black text-emerald-400/70 tracking-[0.2em] uppercase">Levantadas CPU</span>
+            <div className="w-14 h-20 sm:w-20 sm:h-28 bg-black/40 rounded-xl border-2 border-white/5 flex items-center justify-center relative card-stack">
+              {gameState.cpu.capturedCards.length > 0 ? (
+                <div className="absolute inset-0 scale-[0.8] origin-center rotate-3 translate-x-1 translate-y-1">
+                  <div className="w-full h-full bg-[#2d0a0a] border-2 border-[#d4af37]/30 rounded-lg sm:rounded-xl shadow-xl flex items-center justify-center">
+                     <i className="fa-solid fa-shield-halved text-amber-500/20 text-3xl"></i>
+                  </div>
+                </div>
+              ) : null}
+              <div className="z-10 bg-emerald-500 text-black font-black text-xs sm:text-sm w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shadow-lg border-2 border-white/20">
+                {gameState.cpu.capturedCards.length}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex -space-x-12 sm:-space-x-16">
+            {gameState.cpu.hand.map((card) => (
+              <PlayingCard key={card.id} card={card} hidden />
+            ))}
+            <AnimatePresence>
+              {gameState.cpuRevealedCard && (
+                <motion.div initial={{ y: -50, opacity: 0 }} animate={{ y: 100, opacity: 1 }} exit={{ opacity: 0 }} className="absolute z-[80] translate-y-20">
+                  <PlayingCard card={gameState.cpuRevealedCard} highlighted />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="flex flex-col items-center gap-2 opacity-50">
+             <span className="text-[9px] font-black text-white/40 tracking-[0.2em] uppercase">Descarte CPU</span>
+             <div className="w-12 h-16 sm:w-16 sm:h-24 bg-black/20 rounded-lg border border-white/5 overflow-hidden">
+                {gameState.lastCpuPlayedCard && (
+                  <div className="scale-[0.5] origin-top-left -translate-x-1 -translate-y-1 opacity-60">
+                    <PlayingCard card={gameState.lastCpuPlayedCard} disabled />
+                  </div>
+                )}
+             </div>
+          </div>
+        </div>
+
+        {/* MIDDLE AREA: TABLE & MESSAGES */}
+        <div className="w-full max-w-5xl flex flex-col items-center gap-6 sm:gap-10 flex-1 justify-center">
+            <motion.div layout className="w-full min-h-[220px] sm:min-h-[380px] bg-black/50 rounded-[60px] sm:rounded-[120px] border-[3px] border-white/5 shadow-[inset_0_0_100px_rgba(0,0,0,0.8)] flex flex-wrap items-center justify-center gap-4 sm:gap-10 p-6 sm:p-14 relative overflow-y-auto ring-1 ring-white/10">
+                <AnimatePresence mode="popLayout">
+                    {gameState.table.map(card => (
+                        <PlayingCard 
+                            key={card.id} 
+                            card={card} 
+                            disabled 
+                            highlighted={highlightedTableCards.includes(card.id)} 
+                            layoutId={card.id}
+                        />
+                    ))}
+                </AnimatePresence>
+                {gameState.table.length === 0 && gameState.phase === 'playing' && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+                     <span className="text-white font-serif italic text-6xl sm:text-9xl uppercase font-black tracking-tighter">SIN CARTAS</span>
+                  </div>
+                )}
+            </motion.div>
+            
+            <AnimatePresence mode="wait">
+              <motion.div key={dynamicMessage} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} 
+                className="bg-black/90 px-10 sm:px-16 py-3 sm:py-5 rounded-full border border-amber-500/50 shadow-[0_20px_50px_rgba(0,0,0,0.7)] ring-1 ring-white/10">
+                  <p className="text-amber-50 font-serif italic text-base sm:text-2xl text-center leading-tight tracking-wide drop-shadow-md">{dynamicMessage}</p>
+              </motion.div>
+            </AnimatePresence>
+        </div>
+
+        {/* BOTTOM AREA: PLAYER & PLAYER CAPTURES */}
+        <div className="w-full max-w-7xl flex items-end justify-between px-2 sm:px-10 pb-2">
+          <div className="capture-pile flex flex-col items-center gap-2">
+            <span className="text-[9px] font-black text-amber-400/80 tracking-[0.2em] uppercase">Tus Levantadas</span>
+            <div className="w-14 h-20 sm:w-24 sm:h-32 bg-black/40 rounded-xl border-2 border-white/5 flex items-center justify-center relative card-stack">
+              {gameState.player.capturedCards.length > 0 ? (
+                <div className="absolute inset-0 scale-[0.85] origin-center -rotate-2 -translate-x-1 translate-y-1">
+                   {/* Mostrar la última carta capturada si existe para dar feedback visual */}
+                   <div className="w-full h-full bg-[#2d0a0a] border-2 border-[#d4af37]/40 rounded-lg sm:rounded-xl shadow-xl flex items-center justify-center">
+                      <i className="fa-solid fa-crown text-amber-500/20 text-3xl sm:text-4xl"></i>
+                   </div>
+                </div>
+              ) : null}
+              <div className="z-20 bg-amber-500 text-black font-black text-xs sm:text-base w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.5)] border-2 border-white">
+                {gameState.player.capturedCards.length}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-6 flex-1">
+              <div className="flex justify-center -space-x-10 sm:-space-x-14 pb-4">
+                  {gameState.player.hand.map((card, i) => (
+                      <motion.div key={card.id} layoutId={card.id} initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="z-10">
+                          <PlayingCard 
+                            card={card} 
+                            selected={selectedCard?.id === card.id} 
+                            onClick={() => gameState.currentPlayer === 'player' && setSelectedCard(card)}
+                            disabled={gameState.currentPlayer !== 'player' || gameState.phase !== 'playing'} 
+                          />
+                      </motion.div>
+                  ))}
+              </div>
+              
+              <div className="h-16 sm:h-20 flex items-center justify-center w-full">
+                <AnimatePresence>
+                  {selectedCard && (
+                    <motion.button 
+                      initial={{ scale: 0.8, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.8, opacity: 0 }}
+                      onClick={() => playCard('player', selectedCard!)}
+                      className="w-full max-w-sm bg-amber-500 hover:bg-amber-400 text-black font-black py-4 sm:py-6 rounded-full shadow-[0_15px_40px_rgba(245,158,11,0.4)] transition-all active:scale-95 uppercase tracking-[0.3em] text-xs sm:text-sm border-b-4 border-amber-700">
+                      CONFIRMAR JUGADA
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
+          </div>
+
+          {/* ESPACIO VACÍO PARA EQUILIBRAR EL LAYOUT */}
+          <div className="w-14 sm:w-24 hidden lg:block"></div>
+        </div>
+      </main>
+
+      {/* OVERLAYS */}
+      <AnimatePresence>
+        {gameState.phase === 'scoring' && roundResults && (
+          <ScoreBoard 
+            playerDetails={roundResults.player} 
+            cpuDetails={roundResults.cpu} 
+            totalPlayerPoints={totalPoints.player + roundResults.player.points} 
+            totalCpuPoints={totalPoints.cpu + roundResults.cpu.points} 
+            onNextRound={handleNextRound} 
+          />
+        )}
+        
+        {gameState.phase === 'gameOver' && (
+          <div className="fixed inset-0 bg-black/98 backdrop-blur-2xl z-[200] flex items-center justify-center p-4">
+              <div className="max-w-2xl w-full bg-[#011a14] border-[4px] border-amber-500/40 rounded-[60px] p-8 sm:p-20 text-center shadow-[0_0_150px_rgba(0,0,0,1)] paper-texture">
+                  <h2 className="text-5xl sm:text-8xl font-serif font-black text-amber-500 mb-4 italic text-glow">Gran Casino</h2>
+                  <p className="text-amber-200/40 uppercase tracking-[1em] text-[10px] font-black mb-12 italic">EXECUTIVE CLUB</p>
+                  
+                  <div className="flex flex-wrap justify-center gap-3 sm:gap-6 mb-12">
+                      {(['Fácil', 'Normal', 'Pro'] as Difficulty[]).map(d => (
+                        <button key={d} onClick={() => setDifficulty(d)} className={`px-8 py-3 rounded-full border-2 transition-all font-black text-xs uppercase tracking-widest ${difficulty === d ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)]' : 'text-amber-200/30 border-white/10 hover:border-amber-500/30'}`}>
+                            {d}
+                        </button>
+                      ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 bg-black/60 p-8 sm:p-12 rounded-[40px] mb-12 border border-white/5 gap-6 shadow-inner">
+                    <div className="flex flex-col">
+                        <span className="text-[10px] text-amber-500 uppercase font-black block mb-2 tracking-widest">TUS VICTORIAS</span>
+                        <span className="text-5xl sm:text-8xl font-serif font-black text-white leading-none">{totalPoints.player}</span>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-[10px] text-emerald-500 uppercase font-black block mb-2 tracking-widest">CPU</span>
+                        <span className="text-5xl sm:text-8xl font-serif font-black text-white/20 leading-none">{totalPoints.cpu}</span>
+                    </div>
+                  </div>
+
+                  <button onClick={startGame} className="w-full bg-amber-500 hover:bg-amber-400 text-black font-black py-6 sm:py-8 rounded-[30px] sm:rounded-[40px] text-2xl sm:text-3xl uppercase transition-all shadow-[0_20px_60px_rgba(212,175,55,0.4)] active:scale-95 tracking-widest border-b-8 border-amber-700">
+                      {totalPoints.player === 0 && totalPoints.cpu === 0 ? 'TOMAR ASIENTO' : 'SIGUIENTE MANO'}
+                  </button>
+                  
+                  <button onClick={() => { if(confirm("¿Deseas resetear tu historial de casino?")) { localStorage.clear(); location.reload(); } }} className="mt-10 text-white/20 text-[10px] uppercase font-black hover:text-red-500 transition-colors tracking-[0.2em]">
+                    <i className="fa-solid fa-broom mr-2"></i> LIMPIAR REGISTROS DEL CASINO
+                  </button>
+              </div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default App;
