@@ -1,82 +1,19 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>La Escoba de 15 - Gran Casino Royale</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESCOBA DE 15 - TEST</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400;600;700;900&family=Cinzel:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --felt-green: #064e3b;
-            --gold-accent: #d4af37;
-        }
-        body {
-            background-color: #010a08;
-            margin: 0;
-            overflow: hidden;
-            color: #f3f4f6;
-            font-family: 'Crimson Pro', serif;
-            touch-action: manipulation;
-        }
-        .felt-table {
-            background: radial-gradient(circle at center, #065f46 0%, #011a14 100%);
-            background-image: url("https://www.transparenttextures.com/patterns/dark-matter.png"), 
-                              radial-gradient(circle at center, #0a5a40 0%, #021a12 100%);
-            min-height: 100vh;
-            position: relative;
-        }
-        .felt-table::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-image: url("https://www.transparenttextures.com/patterns/felt.png");
-            opacity: 0.3;
-            pointer-events: none;
-        }
-        .gold-border {
-            border: 2px solid transparent;
-            background: linear-gradient(#011a14, #011a14) padding-box,
-                        linear-gradient(to bottom, #d4af37, #926d00) border-box;
-        }
-        .paper-texture {
-            background-image: url("https://www.transparenttextures.com/patterns/gray-linen.png");
-        }
-        .text-glow {
-            text-shadow: 0 0 10px rgba(251, 191, 36, 0.4);
-        }
-        .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .hide-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
-        .capture-pile {
-            perspective: 1000px;
-        }
-        .card-stack {
-            box-shadow: 2px 2px 0 #d4af37, 4px 4px 0 #926d00, 6px 6px 15px rgba(0,0,0,0.5);
-        }
-    </style>
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom": "https://esm.sh/react-dom@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "framer-motion": "https://esm.sh/framer-motion@11.0.8?external=react,react-dom",
-    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/"
-  }
-}
-</script>
 </head>
-<body>
-    <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+<body class="bg-black text-white flex flex-col items-center justify-center h-screen">
+    <div class="p-8 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl text-center">
+        <h1 class="text-4xl font-black text-blue-500 mb-4">ESCOBA V46.1</h1>
+        <p class="text-zinc-400 mb-8">El despliegue de Jules está procesándose...</p>
+        <div class="flex gap-4 justify-center">
+            <div class="w-12 h-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+        </div>
+        <p class="mt-8 text-[10px] text-zinc-600 uppercase tracking-widest">Verificando archivos de Casino Royale</p>
+    </div>
 </body>
 </html>
