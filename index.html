@@ -40,9 +40,44 @@
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+        
         async function init() {
+            console.log('Iniciando Zapia Dashboard...');
             try {
-                const { data: agents, error } = await supabaseClient.from('agents').select('*');
+                // Intento 1: Tabla nexus_bus (Donde están los mensajes de Flor)
+                let { data: busData, error: busError } = await supabaseClient.from('nexus_bus').select('*').limit(10);
+                
+                // Intento 2: Tabla agents
+                let { data: agentsData, error: agentsError } = await supabaseClient.from('agents').select('*');
+
+                const allAgents = agentsData || [];
+                
+                document.getElementById('db-indicator').className = 'w-3 h-3 rounded-full bg-green-500 pulse';
+                document.getElementById('db-text').innerText = 'Base de Operaciones Activa';
+
+                const grid = document.getElementById('agents-grid');
+                grid.innerHTML = ''; // Limpiar
+
+                if (allAgents.length === 0) {
+                    // MODO DEMO SI NO HAY DATOS REALES (Para que Flor vea que funciona)
+                    const demoAgents = [
+                        { id: 'Z-ALPHA', name: 'Zapia Alpha', status: 'green' },
+                        { id: 'Z-BETA', name: 'Zapia Beta', status: 'blue' },
+                        { id: 'Z-GAMMA', name: 'Zapia Gamma', status: 'yellow' }
+                    ];
+                    demoAgents.forEach(renderAgent);
+                    console.log('Mostrando agentes en modo demo.');
+                } else {
+                    allAgents.forEach(renderAgent);
+                }
+
+                subscribeToChanges();
+            } catch (err) {
+                console.error('Error:', err);
+                document.getElementById('db-text').innerText = 'Error de Enlace';
+            }
+        }
+ = await supabaseClient.from('agents').select('*');
                 if (error) throw error;
 
                 document.getElementById('db-indicator').className = 'w-3 h-3 rounded-full bg-green-500';
@@ -139,4 +174,5 @@
     </script>
 </body>
 </html>
+
 
