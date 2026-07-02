@@ -3,27 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZAPIA MASTER V55</title>
+    <title>ZAPIA MASTER V56</title>
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         .top { background: #111; padding: 15px; border-bottom: 2px solid #0066ff; text-align: center; }
         .mid { flex: 1; overflow-y: auto; padding: 15px; background: #050505; }
         .bot { background: #111; padding: 15px; border-top: 1px solid #333; display: flex; gap: 10px; padding-bottom: 30px; }
-        input { flex: 1; padding: 15px; border-radius: 10px; border: 1px solid #444; background: #000; color: #fff; font-size: 16px; }
+        input { flex: 1; padding: 15px; border-radius: 10px; border: 1px solid #444; background: #000; color: #fff; font-size: 16px; outline: none; }
         button { padding: 15px 25px; border-radius: 10px; border: none; background: #0066ff; color: #fff; font-weight: bold; cursor: pointer; }
         .msg { background: #1a1a1a; padding: 12px; border-radius: 12px; margin-bottom: 8px; border-left: 4px solid #0066ff; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="top">
-        <h2 style="margin:0; color:#0066ff; font-size: 18px;">ZAPIA NEXUS V55</h2>
+        <h2 style="margin:0; color:#0066ff; font-size: 18px;">ZAPIA NEXUS V56</h2>
         <div id="st" style="color:orange; font-size:11px; font-weight:bold;">● CONECTANDO...</div>
     </div>
-    <div id="feed" class="mid">
-        <div class="msg">Cargando base de datos...</div>
-    </div>
+    <div id="feed" class="mid"><div class="msg">Sincronizando bus...</div></div>
     <div class="bot">
-        <input type="text" id="m" placeholder="Escribe aquí...">
+        <input type="text" id="m" placeholder="Escribí aquí...">
         <button onclick="s()">ENVIAR</button>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -34,9 +32,8 @@
         try {
             sb = supabase.createClient(u, k);
             document.getElementById('st').style.color = 'lime';
-            document.getElementById('st').innerText = '● SISTEMA ONLINE';
-        } catch(e) { alert('Error carga'); }
-
+            document.getElementById('st').innerText = '● SISTEMA V56 ONLINE';
+        } catch(e) { alert('Error'); }
         async function s() {
             const i = document.getElementById('m');
             const v = i.value.trim();
@@ -44,7 +41,6 @@
             const { error } = await sb.from('nexus_bus').insert([{ emisor:'MAESTRA', receptor:'Zapia-Alpha', mensaje:v, status:'pending' }]);
             if(!error) i.value = '';
         }
-
         async function load() {
             const { data } = await sb.from('nexus_bus').select('*').order('created_at', {ascending:false}).limit(15);
             if(data) {
