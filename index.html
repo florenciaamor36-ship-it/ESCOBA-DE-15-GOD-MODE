@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zapía IA - Base de Operaciones</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-green { background-color: #10b981; }
+        .status-yellow { background-color: #f59e0b; }
+        .status-red { background-color: #ef4444; }
+        .status-blue { background-color: #3b82f6; }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-8">
+    <header class="mb-12 flex justify-between items-center">
+        <div>
+            <h1 class="text-4xl font-bold text-blue-400">Zapía IA</h1>
+            <p class="text-slate-400">Base de Operaciones Centralizada</p>
+        </div>
+        <div id="connection-status" class="flex items-center space-x-2">
+            <div class="w-3 h-3 rounded-full bg-red-500" id="db-indicator"></div>
+            <span id="db-text" class="text-sm font-mono">Desconectado de Supabase</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="agents-grid">
+            <!-- Los agentes se cargarán aquí dinámicamente -->
+        </div>
+    </main>
+
+    <script>
+        // Configuración de Supabase (Se debe inyectar vía ENV o prompt al iniciar)
+        const SUPABASE_URL = 'TU_SUPABASE_URL';
+        const SUPABASE_KEY = 'TU_SUPABASE_ANON_KEY';
+
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function init() {
+            try {
+                const { data: agents, error } = await supabaseClient.from('agents').select('*');
+                if (error) throw error;
+
+                document.getElementById('db-indicator').className = 'w-3 h-3 rounded-full bg-green-500';
+                document.getElementById('db-text').innerText = 'Conectado a Realtime';
+
+                agents.forEach(renderAgent);
+                subscribeToChanges();
+            } catch (err) {
+                console.error('Error inicializando dashboard:', err);
+            }
+        }
+
+        function renderAgent(agent) {
+            const grid = document.getElementById('agents-grid');
+            let card = document.getElementById(`agent-${agent.id}`);
+
+            if (!card) {
+                card = document.createElement('div');
+                card.id = `agent-${agent.id}`;
+                card.className = 'bg-slate-800 rounded-xl p-6 border border-slate-700 hover:border-blue-500 transition-all';
+                grid.appendChild(card);
+            }
+
+            const statusClass = `status-${agent.status}`;
+            const isUpdating = agent.status === 'blue' ? 'pulse' : '';
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 class="text-xl font-bold">${agent.name}</h3>
+                        <p class="text-xs text-slate-500 font-mono">${agent.id}</p>
+                    </div>
+                    <div class="w-4 h-4 rounded-full ${statusClass} ${isUpdating}"></div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Estado:</span>
+                        <span class="font-bold uppercase tracking-wider text-xs">${agent.status}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Sub-procesos:</span>
+                        <span class="bg-slate-700 px-2 py-0.5 rounded text-blue-300 font-bold">${agent.sub_agent_count}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Versión:</span>
+                        <span class="text-slate-300 italic">${agent.version}</span>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-700 flex space-x-2">
+                    <button onclick="sendCommand('${agent.id}', 'PING')" class="flex-1 bg-slate-700 hover:bg-slate-600 py-2 rounded text-sm transition-colors">Ping</button>
+                    <button onclick="sendCommand('${agent.id}', 'RESTART')" class="flex-1 bg-slate-700 hover:bg-slate-600 py-2 rounded text-sm transition-colors text-red-400">Reiniciar</button>
+                </div>
+            `;
+        }
+
+        function subscribeToChanges() {
+            supabaseClient
+                .channel('schema-db-changes')
+                .on('postgres_changes',
+                    { event: '*', schema: 'public', table: 'agents' },
+                    payload => {
+                        console.log('Cambio detectado:', payload);
+                        renderAgent(payload.new);
+                    }
+                )
+                .subscribe();
+        }
+
+        async function sendCommand(agentId, command) {
+            const { error } = await supabaseClient.from('commands').insert({
+                target_agent_id: agentId,
+                command_name: command,
+                payload: { timestamp: new Date().toISOString() }
+            });
+
+            if (error) alert('Error enviando comando: ' + error.message);
+            else console.log('Comando enviado:', command);
+        }
+
+        // Iniciar dashboard
+        if (SUPABASE_URL !== 'TU_SUPABASE_URL') {
+            init();
+        } else {
+            console.warn('Configura tus credenciales de Supabase en index.html');
+        }
+    </script>
+</body>
+</html>
