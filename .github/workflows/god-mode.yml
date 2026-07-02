@@ -1,1 +1,0 @@
-on: push\njobs:\n  evolve:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo God Mode
