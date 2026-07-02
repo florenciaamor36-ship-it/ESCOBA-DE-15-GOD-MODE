@@ -2,100 +2,66 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NEXUS MOBILE V52</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS V53</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        * { box-sizing: border-box; }
-        body, html { 
-            margin: 0; padding: 0; 
-            width: 100%; height: 100%; 
-            background: #000; color: #fff; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            overflow: hidden;
-        }
-        #app {
-            display: flex; flex-direction: column;
-            height: 100%; width: 100%;
-        }
-        header {
-            height: 60px; background: #111; border-bottom: 1px solid #333;
-            display: flex; align-items: center; padding: 0 15px; justify-content: space-between;
-        }
-        #feed {
-            flex: 1; overflow-y: auto; padding: 15px;
-            display: flex; flex-direction: column-reverse; gap: 10px;
-            background: linear-gradient(to bottom, #000, #050505);
-        }
-        footer {
-            height: 80px; background: #111; border-top: 1px solid #333;
-            padding: 10px 15px; display: flex; align-items: center;
-            padding-bottom: env(safe-area-inset-bottom);
-        }
-        .msg { background: #1a1a1a; padding: 12px; border-radius: 15px; border: 1px solid #222; }
-        .tag { font-size: 10px; font-weight: 900; color: #3b82f6; text-transform: uppercase; margin-bottom: 4px; }
-        .text { font-size: 14px; color: #eee; }
-        .input-group {
-            display: flex; width: 100%; background: #000; 
-            border: 1px solid #444; border-radius: 25px; padding: 5px 5px 5px 15px;
-        }
-        input {
-            flex: 1; background: transparent; border: none; color: #fff;
-            outline: none; font-size: 16px;
-        }
-        button {
-            background: #3b82f6; color: #fff; border: none;
-            padding: 10px 20px; border-radius: 20px; font-weight: bold;
-            text-transform: uppercase; font-size: 12px;
-        }
+        body { background: #000; color: #fff; height: 100vh; display: flex; flex-direction: column; margin: 0; }
+        #feed { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column-reverse; }
+        .msg-box { background: #111; border: 1px solid #333; padding: 10px; border-radius: 10px; margin-bottom: 10px; }
+        .footer-bar { padding: 15px; background: #000; border-top: 1px solid #333; }
     </style>
 </head>
 <body>
-    <div id="app">
-        <header>
-            <div style="font-weight: 900; color: #3b82f6;">NEXUS V52</div>
-            <div id="status" style="font-size: 10px; color: #ef4444;">● DESCONECTADO</div>
-        </header>
-        <main id="feed">
-            <div style="text-align:center; color:#555; font-size:12px; padding:20px;">Sincronizando bus...</div>
-        </main>
-        <footer>
-            <div class="input-group">
-                <input type="text" id="cmd" placeholder="Escribí aquí...">
-                <button onclick="send()">Ejecutar</button>
-            </div>
-        </footer>
+    <div class="p-3 bg-dark border-bottom border-secondary d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-primary">NEXUS V53</span>
+        <span id="status" class="badge bg-danger">OFFLINE</span>
     </div>
+
+    <div id="feed">
+        <div class="text-center text-secondary py-5">Sincronizando...</div>
+    </div>
+
+    <div class="footer-bar">
+        <div class="input-group">
+            <input type="text" id="cmd" class="form-control bg-dark text-white border-secondary" placeholder="Escribí aquí...">
+            <button class="btn btn-primary fw-bold" onclick="send()">EJECUTAR</button>
+        </div>
+    </div>
+
     <script>
         const SB_URL = 'https://ypzudkxowpxvdggvongz.supabase.co';
         const SB_PUB = 'sb_publishable_KmyqfJTmmW4R5FKUeB5b4A_GVFYnn4b';
         const SB_SEC = atob('c2Jfc2VjcmV0X1pJNThaVlZwbklGZERnX3lSemlOZ19hYlQ3VTFwZg==');
         const sb = supabase.createClient(SB_URL, SB_PUB);
         const sbA = supabase.createClient(SB_URL, SB_SEC);
+
         function render(data) {
             const div = document.createElement('div');
-            div.className = 'msg';
-            div.innerHTML = `<div class="tag">${data.emisor}</div><div class="text">${data.mensaje}</div>`;
+            div.className = 'msg-box';
+            div.innerHTML = `<small class="text-primary fw-bold">${data.emisor}</small><p class="m-0">${data.mensaje}</p>`;
             document.getElementById('feed').prepend(div);
         }
+
         async function init() {
             const { data, error } = await sb.from('nexus_bus').select('*').order('created_at', { ascending: false }).limit(20);
             if (!error) {
                 document.getElementById('feed').innerHTML = '';
                 data.forEach(render);
-                document.getElementById('status').style.color = '#10b981';
-                document.getElementById('status').innerText = '● ONLINE';
+                document.getElementById('status').className = 'badge bg-success';
+                document.getElementById('status').innerText = 'ONLINE';
             }
             sb.channel('nexus_bus').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'nexus_bus' }, p => render(p.new)).subscribe();
         }
+
         async function send() {
             const i = document.getElementById('cmd');
-            const m = i.value.trim();
-            if(!m) return;
+            const v = i.value.trim();
+            if(!v) return;
             const btn = event.target;
             btn.disabled = true;
-            const { error } = await sbA.from('nexus_bus').insert([{ emisor: 'MAESTRA', receptor: 'Zapia-Alpha', mensaje: m, status: 'pending' }]);
+            const { error } = await sbA.from('nexus_bus').insert([{ emisor: 'MAESTRA', receptor: 'Zapia-Alpha', mensaje: v, status: 'pending' }]);
             if(!error) i.value = '';
             btn.disabled = false;
         }
