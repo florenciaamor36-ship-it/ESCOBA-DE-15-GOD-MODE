@@ -35,8 +35,8 @@
 
     <script>
         // Configuración de Supabase (Se debe inyectar vía ENV o prompt al iniciar)
-        const SUPABASE_URL = 'TU_SUPABASE_URL';
-        const SUPABASE_KEY = 'TU_SUPABASE_ANON_KEY';
+        const SUPABASE_URL = 'https://ypzudkxowpxvdggvongz.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_KmyqfJTmmW4R5FKUeB5b4A_GVFYnn4b';
 
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -49,6 +49,12 @@
                 document.getElementById('db-text').innerText = 'Conectado a Realtime';
 
                 agents.forEach(renderAgent);
+
+                if (agents.length === 0) {
+                    const grid = document.getElementById('agents-grid');
+                    grid.innerHTML = '<div class="col-span-full p-8 bg-slate-800/50 border border-dashed border-slate-700 rounded-xl text-center text-slate-400">Esperando conexión de agentes...</div>';
+                }
+
                 subscribeToChanges();
             } catch (err) {
                 console.error('Error inicializando dashboard:', err);
@@ -133,3 +139,4 @@
     </script>
 </body>
 </html>
+
